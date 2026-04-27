@@ -6,7 +6,7 @@ let player = {
   y: 200,
   vy: 0,
   gravity: 0.6,
-  jumpPower: -10,
+  jumpPower: -12,
   grounded: true
 };
 
@@ -58,13 +58,10 @@ function drawScore() {
   ctx.fillText("Score: " + score, 10, 30);
 }
 
-// GAME OVER SCREEN
+// GAME OVER
 function drawGameOver() {
-  // blood effect
-  ctx.fillStyle = "rgba(200,0,0,0.3)";
-  for (let i = 0; i < 50; i++) {
-    ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 5, 10);
-  }
+  ctx.fillStyle = "rgba(200,0,0,0.4)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.fillStyle = "red";
   ctx.font = "50px Arial";
@@ -80,12 +77,12 @@ function update() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // increase difficulty
-  speed += 0.001;
-  score += 1;
+  score++;
 
+  // move gaps
   gaps.forEach(gap => gap.x -= speed);
 
+  // recycle gap
   if (gaps[0].x + gaps[0].width < 0) {
     gaps.shift();
     gaps.push({
@@ -94,25 +91,29 @@ function update() {
     });
   }
 
+  // gravity
   player.vy += player.gravity;
   player.y += player.vy;
 
-  // cek jatuh ke jurang
-  let onGround = false;
+  // cek apakah di atas gap
+  let overGap = false;
   gaps.forEach(gap => {
     if (player.x > gap.x && player.x < gap.x + gap.width) {
-      onGround = false;
+      overGap = true;
     }
   });
 
-  if (player.y >= 200) {
+  // kalau tidak di atas gap → ada tanah
+  if (!overGap && player.y >= 200) {
     player.y = 200;
     player.vy = 0;
     player.grounded = true;
+  } else {
+    player.grounded = false;
   }
 
-  // jatuh = game over
-  if (player.y > canvas.height) {
+  // kalau jatuh ke bawah → game over
+  if (overGap && player.y > 220) {
     gameOver = true;
   }
 
@@ -123,7 +124,7 @@ function update() {
   requestAnimationFrame(update);
 }
 
-// VOICE CONTROL (POWER BASED)
+// VOICE CONTROL (FIXED JUMP + LOWER SENSITIVITY)
 navigator.mediaDevices.getUserMedia({ audio: true })
 .then(stream => {
   const audioContext = new AudioContext();
@@ -142,12 +143,9 @@ navigator.mediaDevices.getUserMedia({ audio: true })
 
     let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
 
-    if (volume > 30 && player.grounded) {
-      // semakin besar suara → lompat makin tinggi
-      let dynamicJump = - (volume / 5);
-      if (dynamicJump < -20) dynamicJump = -20; // limit biar ga terlalu OP
-
-      player.vy = dynamicJump;
+    // threshold dinaikkan → tidak sensitif
+    if (volume > 60 && player.grounded) {
+      player.vy = player.jumpPower;
       player.grounded = false;
     }
 
