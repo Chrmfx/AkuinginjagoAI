@@ -1,101 +1,115 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// Player
 let player = {
-  x: 50,
+  x: 100,
   y: 200,
-  width: 30,
-  height: 30,
-  dy: 0,
+  vy: 0,
   gravity: 0.6,
   jumpPower: -10,
   grounded: true
 };
 
-// Ground + gap
-let groundY = 230;
-let gapStart = 300;
-let gapWidth = 120;
+let gaps = [
+  { x: 400, width: 80 },
+  { x: 700, width: 100 }
+];
 
-// Audio setup
-let audioContext, analyser, microphone, dataArray;
+let speed = 3;
 
-async function initMic() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  audioContext = new AudioContext();
-  analyser = audioContext.createAnalyser();
-  microphone = audioContext.createMediaStreamSource(stream);
+// DRAW PLAYER
+function drawPlayer() {
+  ctx.beginPath();
+  ctx.arc(player.x, player.y - 15, 5, 0, Math.PI * 2);
+  ctx.stroke();
 
-  microphone.connect(analyser);
-  analyser.fftSize = 256;
+  ctx.beginPath();
+  ctx.moveTo(player.x, player.y - 10);
+  ctx.lineTo(player.x, player.y + 10);
+  ctx.stroke();
 
-  const bufferLength = analyser.frequencyBinCount;
-  dataArray = new Uint8Array(bufferLength);
+  ctx.beginPath();
+  ctx.moveTo(player.x, player.y);
+  ctx.lineTo(player.x - 5, player.y + 10);
+  ctx.moveTo(player.x, player.y);
+  ctx.lineTo(player.x + 5, player.y + 10);
+  ctx.stroke();
 }
 
-function getVolume() {
-  analyser.getByteFrequencyData(dataArray);
-  let sum = 0;
-  for (let i = 0; i < dataArray.length; i++) {
-    sum += dataArray[i];
-  }
-  return sum / dataArray.length;
+// DRAW GROUND
+function drawGround() {
+  ctx.fillStyle = "black";
+
+  let prevX = 0;
+
+  gaps.forEach(gap => {
+    ctx.fillRect(prevX, 220, gap.x - prevX, 80);
+    prevX = gap.x + gap.width;
+  });
+
+  ctx.fillRect(prevX, 220, canvas.width - prevX, 80);
 }
 
-// Game loop
+// GAME LOOP
 function update() {
-  requestAnimationFrame(update);
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Draw ground
-  ctx.fillStyle = "green";
-  ctx.fillRect(0, groundY, gapStart, 70);
-  ctx.fillRect(gapStart + gapWidth, groundY, canvas.width, 70);
+  gaps.forEach(gap => gap.x -= speed);
 
-  // Volume detection
-  let volume = getVolume();
+  if (gaps[0].x + gaps[0].width < 0) {
+    gaps.shift();
+    gaps.push({
+      x: canvas.width + Math.random() * 200,
+      width: 60 + Math.random() * 60
+    });
+  }
 
-  if (volume > 40 && player.grounded) {
-    player.dy = player.jumpPower - (volume / 20); // louder = higher jump
+  player.vy += player.gravity;
+  player.y += player.vy;
+
+  if (player.y >= 200) {
+    player.y = 200;
+    player.vy = 0;
+    player.grounded = true;
+  } else {
     player.grounded = false;
   }
 
-  // Physics
-  player.dy += player.gravity;
-  player.y += player.dy;
+  drawGround();
+  drawPlayer();
 
-  // Ground collision
-  if (
-    player.y + player.height >= groundY &&
-    (player.x < gapStart || player.x > gapStart + gapWidth)
-  ) {
-    player.y = groundY - player.height;
-    player.dy = 0;
-    player.grounded = true;
-  }
-
-  // Fall into gap
-  if (
-    player.x > gapStart &&
-    player.x < gapStart + gapWidth &&
-    player.y > canvas.height
-  ) {
-    alert("Game Over!");
-    location.reload();
-  }
-
-  // Draw player
-  ctx.fillStyle = "red";
-  ctx.fillRect(player.x, player.y, player.width, player.height);
-
-  // Move forward
-  gapStart -= 2;
+  requestAnimationFrame(update);
 }
 
-// Start game after click (browser policy)
-document.body.addEventListener("click", async () => {
-  await initMic();
-  update();
+// VOICE CONTROL
+navigator.mediaDevices.getUserMedia({ audio: true })
+.then(stream => {
+  const audioContext = new AudioContext();
+  const mic = audioContext.createMediaStreamSource(stream);
+  const analyser = audioContext.createAnalyser();
+
+  mic.connect(analyser);
+  analyser.fftSize = 256;
+
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  function detectSound() {
+    analyser.getByteFrequencyData(dataArray);
+
+    let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+
+    if (volume > 40 && player.grounded) {
+      player.vy = player.jumpPower;
+      player.grounded = false;
+    }
+
+    requestAnimationFrame(detectSound);
+  }
+
+  detectSound();
+})
+.catch(() => {
+  alert("Microphone access denied!");
 });
+
+update();
