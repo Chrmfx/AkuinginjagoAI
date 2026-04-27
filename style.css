@@ -1,11 +1,11 @@
 body {
-  text-align: center;
-  font-family: Arial;
-  background: #222;
-  color: white;
+  margin: 0;
+  background: black;
+  overflow: hidden;
 }
 
 canvas {
-  background: #87CEEB;
-  border: 2px solid white;
+  display: block;
+  margin: auto;
+  background: white;
 }
