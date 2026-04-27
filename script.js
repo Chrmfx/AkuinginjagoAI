@@ -16,6 +16,8 @@ let gaps = [
 ];
 
 let speed = 3;
+let score = 0;
+let gameOver = false;
 
 // DRAW PLAYER
 function drawPlayer() {
@@ -39,7 +41,6 @@ function drawPlayer() {
 // DRAW GROUND
 function drawGround() {
   ctx.fillStyle = "black";
-
   let prevX = 0;
 
   gaps.forEach(gap => {
@@ -50,9 +51,38 @@ function drawGround() {
   ctx.fillRect(prevX, 220, canvas.width - prevX, 80);
 }
 
+// DRAW SCORE
+function drawScore() {
+  ctx.fillStyle = "black";
+  ctx.font = "20px Arial";
+  ctx.fillText("Score: " + score, 10, 30);
+}
+
+// GAME OVER SCREEN
+function drawGameOver() {
+  // blood effect
+  ctx.fillStyle = "rgba(200,0,0,0.3)";
+  for (let i = 0; i < 50; i++) {
+    ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 5, 10);
+  }
+
+  ctx.fillStyle = "red";
+  ctx.font = "50px Arial";
+  ctx.fillText("YOU ARE DEAD", 180, 150);
+}
+
 // GAME LOOP
 function update() {
+  if (gameOver) {
+    drawGameOver();
+    return;
+  }
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // increase difficulty
+  speed += 0.001;
+  score += 1;
 
   gaps.forEach(gap => gap.x -= speed);
 
@@ -67,21 +97,33 @@ function update() {
   player.vy += player.gravity;
   player.y += player.vy;
 
+  // cek jatuh ke jurang
+  let onGround = false;
+  gaps.forEach(gap => {
+    if (player.x > gap.x && player.x < gap.x + gap.width) {
+      onGround = false;
+    }
+  });
+
   if (player.y >= 200) {
     player.y = 200;
     player.vy = 0;
     player.grounded = true;
-  } else {
-    player.grounded = false;
+  }
+
+  // jatuh = game over
+  if (player.y > canvas.height) {
+    gameOver = true;
   }
 
   drawGround();
   drawPlayer();
+  drawScore();
 
   requestAnimationFrame(update);
 }
 
-// VOICE CONTROL
+// VOICE CONTROL (POWER BASED)
 navigator.mediaDevices.getUserMedia({ audio: true })
 .then(stream => {
   const audioContext = new AudioContext();
@@ -94,12 +136,18 @@ navigator.mediaDevices.getUserMedia({ audio: true })
   const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
   function detectSound() {
+    if (gameOver) return;
+
     analyser.getByteFrequencyData(dataArray);
 
     let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
 
-    if (volume > 40 && player.grounded) {
-      player.vy = player.jumpPower;
+    if (volume > 30 && player.grounded) {
+      // semakin besar suara → lompat makin tinggi
+      let dynamicJump = - (volume / 5);
+      if (dynamicJump < -20) dynamicJump = -20; // limit biar ga terlalu OP
+
+      player.vy = dynamicJump;
       player.grounded = false;
     }
 
