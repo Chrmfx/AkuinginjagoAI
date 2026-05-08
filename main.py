@@ -1,238 +1,203 @@
-# Stickman Voice Jump - Python Version
-# Run with: python main.py
-#
-# Install:
-# pip install pygame sounddevice numpy
-
 import pygame
-import random
-import numpy as np
-import sounddevice as sd
+import sys
 
-# =========================
-# GAME SETUP
-# =========================
 pygame.init()
 
-WIDTH = 800
-HEIGHT = 300
+# =============================
+# SETUP
+# =============================
+WIDTH = 1000
+HEIGHT = 500
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Stickman Voice Jump")
+pygame.display.set_caption("Stickman Platformer")
 
 clock = pygame.time.Clock()
 
-# =========================
-# PLAYER
-# =========================
-player = {
-    "x": 100,
-    "y": 200,
-    "vy": 0,
-    "gravity": 0.6,
-    "jumpPower": -12,
-    "grounded": True
-}
+# =============================
+# WARNA
+# =============================
+SKY = (135, 206, 235)
+GROUND = (50, 180, 75)
+DIRT = (120, 70, 15)
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+RED = (220, 50, 50)
 
-# =========================
-# GAPS
-# =========================
-gaps = [
-    {"x": 400, "width": 80},
-    {"x": 700, "width": 100}
+# =============================
+# PLAYER
+# =============================
+player_x = 100
+player_y = 300
+
+player_w = 40
+player_h = 70
+
+velocity_y = 0
+gravity = 0.8
+jump_power = -15
+
+speed = 5
+on_ground = False
+
+# =============================
+# PLATFORM / GROUND
+# =============================
+ground_y = 400
+
+# Lubang
+holes = [
+    pygame.Rect(250, ground_y, 120, 100),
+    pygame.Rect(500, ground_y, 150, 100),
+    pygame.Rect(800, ground_y, 100, 100),
 ]
 
-speed = 3
+# =============================
+# FONT
+# =============================
+font = pygame.font.SysFont("Arial", 32)
+
+# =============================
+# SCORE
+# =============================
 score = 0
 game_over = False
 
-# =========================
-# MICROPHONE
-# =========================
-volume_level = 0
+# =============================
+# DRAW STICKMAN
+# =============================
+def draw_stickman(x, y):
+    # Kepala
+    pygame.draw.circle(screen, BLACK, (x + 20, y + 15), 12)
 
-def audio_callback(indata, frames, time, status):
-    global volume_level
+    # Badan
+    pygame.draw.line(screen, BLACK, (x + 20, y + 28), (x + 20, y + 50), 4)
 
-    volume_norm = np.linalg.norm(indata) * 10
-    volume_level = volume_norm
+    # Tangan
+    pygame.draw.line(screen, BLACK, (x + 5, y + 38), (x + 35, y + 38), 4)
 
-stream = sd.InputStream(callback=audio_callback)
-stream.start()
+    # Kaki
+    pygame.draw.line(screen, BLACK, (x + 20, y + 50), (x + 5, y + 70), 4)
+    pygame.draw.line(screen, BLACK, (x + 20, y + 50), (x + 35, y + 70), 4)
 
-# =========================
-# DRAW PLAYER
-# =========================
-def draw_player():
-    x = int(player["x"])
-    y = int(player["y"])
 
-    # head
-    pygame.draw.circle(screen, (0, 0, 0), (x, y - 15), 5, 1)
-
-    # body
-    pygame.draw.line(screen, (0, 0, 0), (x, y - 10), (x, y + 10), 2)
-
-    # legs
-    pygame.draw.line(screen, (0, 0, 0), (x, y), (x - 5, y + 10), 2)
-    pygame.draw.line(screen, (0, 0, 0), (x, y), (x + 5, y + 10), 2)
-
-# =========================
-# DRAW GROUND
-# =========================
-def draw_ground():
-    prev_x = 0
-
-    for gap in gaps:
-        pygame.draw.rect(
-            screen,
-            (0, 0, 0),
-            (prev_x, 220, gap["x"] - prev_x, 80)
-        )
-
-        prev_x = gap["x"] + gap["width"]
-
-    pygame.draw.rect(
-        screen,
-        (0, 0, 0),
-        (prev_x, 220, WIDTH - prev_x, 80)
-    )
-
-# =========================
-# DRAW SCORE
-# =========================
-font = pygame.font.SysFont("Arial", 20)
-big_font = pygame.font.SysFont("Arial", 50)
-
-def draw_score():
-    text = font.render(f"Score: {score}", True, (0, 0, 0))
-    screen.blit(text, (10, 10))
-
-# =========================
-# GAME OVER
-# =========================
-def draw_game_over():
-    overlay = pygame.Surface((WIDTH, HEIGHT))
-    overlay.set_alpha(120)
-    overlay.fill((200, 0, 0))
-    screen.blit(overlay, (0, 0))
-
-    text = big_font.render("YOU ARE DEAD", True, (255, 0, 0))
-    screen.blit(text, (180, 130))
-
-# =========================
-# RESET GAME
-# =========================
-def reset_game():
-    global player, gaps, score, game_over
-
-    player = {
-        "x": 100,
-        "y": 200,
-        "vy": 0,
-        "gravity": 0.6,
-        "jumpPower": -12,
-        "grounded": True
-    }
-
-    gaps = [
-        {"x": 400, "width": 80},
-        {"x": 700, "width": 100}
-    ]
-
-    score = 0
-    game_over = False
-
-# =========================
+# =============================
 # GAME LOOP
-# =========================
-running = True
+# =============================
+while True:
 
-while running:
-
-    clock.tick(60)
-
-    # EVENTS
+    # =========================
+    # EVENT
+    # =========================
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            running = False
+            pygame.quit()
+            sys.exit()
 
-        # restart
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_r and game_over:
-                reset_game()
+            if game_over and event.key == pygame.K_r:
+                # Reset game
+                player_x = 100
+                player_y = 300
+                velocity_y = 0
+                score = 0
+                game_over = False
 
-    # BACKGROUND
-    screen.fill((255, 255, 255))
+    keys = pygame.key.get_pressed()
 
     if not game_over:
 
-        score += 1
+        # =====================
+        # GERAK PLAYER
+        # =====================
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            player_x -= speed
 
-        # move gaps
-        for gap in gaps:
-            gap["x"] -= speed
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            player_x += speed
 
-        # recycle gaps
-        if gaps[0]["x"] + gaps[0]["width"] < 0:
-            gaps.pop(0)
+        # Lompat
+        if (keys[pygame.K_SPACE]) and on_ground:
+            velocity_y = jump_power
+            on_ground = False
 
-            gaps.append({
-                "x": WIDTH + random.randint(0, 200),
-                "width": random.randint(60, 120)
-            })
+        # Gravity
+        velocity_y += gravity
+        player_y += velocity_y
 
-        # gravity
-        player["vy"] += player["gravity"]
-        player["y"] += player["vy"]
+        # Batas tanah
+        player_rect = pygame.Rect(player_x, player_y, player_w, player_h)
 
-        # detect gap
-        over_gap = False
+        standing = False
 
-        for gap in gaps:
-            if player["x"] > gap["x"] and player["x"] < gap["x"] + gap["width"]:
-                over_gap = True
+        # Cek apakah di atas lubang
+        in_hole = False
+        for hole in holes:
+            if player_rect.colliderect(hole):
+                in_hole = True
 
-        # ground collision
-        if not over_gap and player["y"] >= 200:
-            player["y"] = 200
-            player["vy"] = 0
-            player["grounded"] = True
-        else:
-            player["grounded"] = False
+        if player_y + player_h >= ground_y and not in_hole:
+            player_y = ground_y - player_h
+            velocity_y = 0
+            standing = True
 
-        # fall = dead
-        if over_gap and player["y"] > 220:
+        on_ground = standing
+
+        # Jatuh ke bawah = kalah
+        if player_y > HEIGHT:
             game_over = True
 
-        # =========================
-        # VOICE JUMP
-        # =========================
-        # lower sensitivity
-        if volume_level > 5 and player["grounded"]:
-            player["vy"] = player["jumpPower"]
-            player["grounded"] = False
+        # Score berdasarkan jarak
+        score = max(score, player_x - 100)
 
+    # =========================
     # DRAW
-    draw_ground()
-    draw_player()
-    draw_score()
+    # =========================
+    screen.fill(SKY)
 
-    # mic volume debug
-    mic_text = font.render(f"Mic: {volume_level:.1f}", True, (0, 0, 255))
-    screen.blit(mic_text, (10, 40))
+    # Matahari
+    pygame.draw.circle(screen, (255, 230, 0), (850, 80), 40)
 
+    # Ground
+    pygame.draw.rect(
+        screen,
+        GROUND,
+        (0, ground_y, WIDTH, HEIGHT - ground_y)
+    )
+
+    # Dirt layer
+    pygame.draw.rect(
+        screen,
+        DIRT,
+        (0, ground_y + 20, WIDTH, HEIGHT - ground_y)
+    )
+
+    # Lubang
+    for hole in holes:
+        pygame.draw.rect(screen, BLACK, hole)
+
+    # Stickman
+    draw_stickman(player_x, player_y)
+
+    # Score text
+    score_text = font.render(f"Score: {score}", True, WHITE)
+    screen.blit(score_text, (20, 20))
+
+    # Finish line
+    pygame.draw.rect(screen, RED, (950, 300, 20, 100))
+
+    # Menang
+    if player_x > 930:
+        win_text = font.render("KAMU MENANG!", True, WHITE)
+        screen.blit(win_text, (350, 180))
+
+    # Game over
     if game_over:
-        draw_game_over()
+        over_text = font.render("GAME OVER", True, RED)
+        retry_text = font.render("Tekan R untuk restart", True, WHITE)
 
-        restart_text = font.render(
-            "Press R to Restart",
-            True,
-            (255, 255, 255)
-        )
-
-        screen.blit(restart_text, (300, 200))
+        screen.blit(over_text, (380, 180))
+        screen.blit(retry_text, (300, 240))
 
     pygame.display.update()
-
-pygame.quit()
+    clock.tick(60)
